@@ -27,6 +27,17 @@ def apply_1q_gate_simple(state, gate):
         
 
 def apply_gate(state, targets, gate):
+    """
+    Apply a gate to the specified targets in the state.
+    Parameters
+    ----------
+    state : array_like
+        The state vector to which the gate is applied.
+    targets : list of int
+        The indices of the qubits to which the gate is applied.
+    gate : array_like
+        The gate to be applied, which should have a shape compatible with the targets.
+    """
     state = np.asarray(state)
     gate = np.asarray(gate)
     
@@ -34,6 +45,6 @@ def apply_gate(state, targets, gate):
     m = len(targets)
     
     state = np.tensordot(state, gate, (targets, np.arange(m)))
-                         
+
     return np.moveaxis(state, np.arange(n-m,n), targets)
     
