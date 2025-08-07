@@ -1,4 +1,5 @@
 import numpy as np
+import itertools
 
 gates = {'X': np.array([[0, 1], [1, 0]]),
          'Y': np.array([[0, -1j], [1j, 0]]),
@@ -50,7 +51,15 @@ def init_zeros(N, d):
         mps.append(tensor)
     return mps
 
-def give_flat(mps):
+def flatten(mps):
+    fullstate = as_array(mps)
+    fullstate = fullstate.flatten()
+    n = np.log2(len(fullstate))
+    probabilities = np.abs(fullstate) ** 2
+    basis  = [''.join(bits) for bits in itertools.product('01', repeat=int(n))]
+    return dict(zip(basis, probabilities))
+
+def as_array(mps):
     flat = mps[0]
     for tensor in mps[1:]:
         flat = np.tensordot(flat, tensor, 1)
@@ -58,11 +67,17 @@ def give_flat(mps):
     return flat.squeeze()
 
 def apply_1q_gate(mps, target, gate):
+    if isinstance(gate, str):
+        gate = gates[gate]
+    
     mps[target] = np.tensordot(mps[target], gate, axes=([1], [0]))
     mps[target] = np.moveaxis(mps[target], 2, 1)
     return mps
     
 def apply_2q_gate_nn(mps, targets, gate):
+    
+    if isinstance(gate, str):
+        gate = gates[gate]
     
     tA, tB = targets
     if tA > tB:
@@ -94,4 +109,76 @@ def apply_2q_gate_nn(mps, targets, gate):
     new_state = list(mps)
     new_state[tA] = A
     new_state[tB] = B
-    return mps
+    return new_state
+
+def left_canonicalize(mps, index):
+    new_mps = list(mps)
+    if index == 0:
+        return new_mps
+    
+    for i in range(index):
+        A = new_mps[i]
+        B = new_mps[i + 1]
+        AB = np.tensordot(A, B, 1)
+
+        bond_A, out_A, out_B, bond_B = AB.shape
+
+        AB = AB.reshape(bond_A*out_A, out_B*bond_B)
+        Q,R = np.linalg.qr(AB)
+        new_bond = Q.shape[1]
+
+        new_mps[i] = Q.reshape(bond_A, out_A, new_bond)
+        new_mps[i+1] = R.reshape(new_bond, out_B, bond_B)
+
+def right_canonicalize(mps, index):
+    new_mps = list(mps)
+    if index == len(mps) - 1:
+        return new_mps
+    
+    for i in range(n-1, index, -1):
+        A = new_mps[i]
+        B = new_mps[i - 1]
+        AB = np.tensordot(A, B, 1)
+
+        bond_A, out_A, out_B, bond_B = AB.shape
+
+        AB = AB.reshape(bond_A*out_A, out_B*bond_B)
+        Q,R = np.linalg.qr(AB)
+        new_bond = Q.shape[1]
+
+        new_mps[i] = Q.reshape(bond_A, out_A, new_bond)
+        new_mps[i-1] = R.reshape(new_bond, out_B, bond_B)
+    
+
+def apply_2q_gate_nn_Tebd(mps, targets, gate):
+    new_state = list(mps)
+    
+    if isinstance(gate, str):
+        gate = gates[gate]
+    
+    tA, tB = targets
+    if tA > tB:
+        tA, tB = tB, tA
+        gate = np.transpose(gate, (1, 0, 3, 2))
+    assert tB == tA + 1, "2-qubit gate must be applied to nearest neighbors"
+    
+    
+    A = mps[tA]
+    B = mps[tB]
+    
+    assert A.ndim == 3 and B.ndim == 3, "Tensors must be 3-dimensional"
+    assert gate.ndim == 4, "Gate must be 4-dimensional"
+    
+    AB = np.tensordot(A, B, 1)
+
+    bond_A, out_A, out_B, bond_B = AB.shape
+
+    AB = AB.reshape(bond_A*out_A, out_B*bond_B)
+    Q,R = np.linalg.qr(AB)
+
+    new_bond = Q.shape[1]
+    
+    new_state[tA] = Q.reshape(bond_A, out_A, new_bond)
+    new_state[tB] = R.reshape(new_bond, out_B, bond_B)
+    
+    return new_state
