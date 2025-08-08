@@ -1,5 +1,6 @@
 import numpy as np
 import itertools
+import matplotlib.pyplot as plt
 
 gates = {'X': np.array([[0, 1], [1, 0]]),
          'Y': np.array([[0, -1j], [1j, 0]]),
@@ -129,25 +130,30 @@ def left_canonicalize(mps, index):
 
         new_mps[i] = Q.reshape(bond_A, out_A, new_bond)
         new_mps[i+1] = R.reshape(new_bond, out_B, bond_B)
+    return new_mps
 
 def right_canonicalize(mps, index):
     new_mps = list(mps)
     if index == len(mps) - 1:
         return new_mps
-    
+    n= len(mps)
     for i in range(n-1, index, -1):
-        A = new_mps[i]
-        B = new_mps[i - 1]
+        A = new_mps[i-1]
+        B = new_mps[i]
         AB = np.tensordot(A, B, 1)
 
         bond_A, out_A, out_B, bond_B = AB.shape
 
-        AB = AB.reshape(bond_A*out_A, out_B*bond_B)
-        Q,R = np.linalg.qr(AB)
-        new_bond = Q.shape[1]
-
-        new_mps[i] = Q.reshape(bond_A, out_A, new_bond)
-        new_mps[i-1] = R.reshape(new_bond, out_B, bond_B)
+        AB = AB.reshape(out_A*bond_A, bond_B*out_B)
+        R,Q = np.linalg.qr(AB.T)
+        R = R.T
+        Q = Q.T
+        print(R.shape, Q.shape)
+        new_bond = R.shape[1]
+        
+        new_mps[i-1] = R.reshape(bond_A, out_A, new_bond)
+        new_mps[i]   = Q.reshape(new_bond, out_B, bond_B)
+    return new_mps
     
 
 def apply_2q_gate_nn_Tebd(mps, targets, gate):
@@ -162,23 +168,7 @@ def apply_2q_gate_nn_Tebd(mps, targets, gate):
         gate = np.transpose(gate, (1, 0, 3, 2))
     assert tB == tA + 1, "2-qubit gate must be applied to nearest neighbors"
     
-    
-    A = mps[tA]
-    B = mps[tB]
-    
-    assert A.ndim == 3 and B.ndim == 3, "Tensors must be 3-dimensional"
-    assert gate.ndim == 4, "Gate must be 4-dimensional"
-    
-    AB = np.tensordot(A, B, 1)
-
-    bond_A, out_A, out_B, bond_B = AB.shape
-
-    AB = AB.reshape(bond_A*out_A, out_B*bond_B)
-    Q,R = np.linalg.qr(AB)
-
-    new_bond = Q.shape[1]
-    
-    new_state[tA] = Q.reshape(bond_A, out_A, new_bond)
-    new_state[tB] = R.reshape(new_bond, out_B, bond_B)
+    new_state = left_canonicalize(mps, tB)
+    new_state = right_canonicalize(new_state, tB)
     
     return new_state

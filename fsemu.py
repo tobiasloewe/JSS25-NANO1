@@ -1,5 +1,6 @@
 import numpy as np
 import itertools
+import matplotlib.pyplot as plt
 
 gates = {'X': np.array([[0, 1], [1, 0]]),
          'Y': np.array([[0, -1j], [1j, 0]]),
@@ -107,4 +108,15 @@ def apply_1q_gate_simple(state, gate):
         
     return new_state
 
-    
+def sample(state, n_samples=1000):
+    probabilities = get_probabilities(state)
+    samples = []
+    for i in range(n_samples):
+        samples.append(sample_state(state))
+    bitstrings = [''.join(map(str, s)) for s in samples]
+    labels = sorted(set(bitstrings))
+    counts, bins, patches = plt.hist(bitstrings, bins=len(labels), rwidth=0.8, align='left')
+    plt.xticks(ticks=bins[:-1], labels=labels)
+    plt.ylabel('n')
+    plt.title('Sampled Bitstring Histogram')
+    plt.show()
